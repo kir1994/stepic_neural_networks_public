@@ -26,13 +26,13 @@ class World(metaclass=ABCMeta):
 
 
 class SimpleCarWorld(World):
-    COLLISION_PENALTY =  # выберите сами
-    HEADING_REWARD =  # выберите сами
-    WRONG_HEADING_PENALTY =  # выберите сами
-    IDLENESS_PENALTY =  # выберите сами
-    SPEEDING_PENALTY =  # выберите сами
-    MIN_SPEED =  # выберите сами
-    MAX_SPEED =  # выберите сами
+    COLLISION_PENALTY = 32 * 1e0 # выберите сами
+    HEADING_REWARD = 15 * 1e-0 # выберите сами
+    WRONG_HEADING_PENALTY = -50 * 1e0 # выберите сами
+    IDLENESS_PENALTY = 32 * 1e-1 # выберите сами
+    SPEEDING_PENALTY = 0 * 1e-1 # выберите сами
+    MIN_SPEED = 0.1 * 1e0 # выберите сами
+    MAX_SPEED = 10 * 1e0 # выберите сами
 
     size = (800, 600)
 
@@ -105,14 +105,29 @@ class SimpleCarWorld(World):
         :return reward: награду агента (возможно, отрицательную)
         """
         a = np.sin(angle(-state.position, state.heading))
-        heading_reward = 1 if a > 0.1 else a if a > 0 else 0
-        heading_penalty = a if a <= 0 else 0
+        heading_score = self.HEADING_REWARD * np.tanh(-2 * a)  
         idle_penalty = 0 if abs(state.velocity) > self.MIN_SPEED else -self.IDLENESS_PENALTY
         speeding_penalty = 0 if abs(state.velocity) < self.MAX_SPEED else -self.SPEEDING_PENALTY * abs(state.velocity)
         collision_penalty = - max(abs(state.velocity), 0.1) * int(collision) * self.COLLISION_PENALTY
 
-        return heading_reward * self.HEADING_REWARD + heading_penalty * self.WRONG_HEADING_PENALTY + collision_penalty \
-               + idle_penalty + speeding_penalty
+        dist = np.infty
+        sectors = len(self.map)
+        for j in range(sectors):
+                inner_wall = self.map[j - 1][0], self.map[j][0]
+                outer_wall = self.map[j - 1][1], self.map[j][1]
+
+                intersect = intersect_ray_with_segment((state.position, state.heading), inner_wall)
+                intersect = abs(intersect - state.position) if intersect is not None else np.infty
+                if intersect < dist:
+                    dist = intersect
+
+                intersect = intersect_ray_with_segment((state.position, state.heading), outer_wall)
+                intersect = abs(intersect - state.position) if intersect is not None else np.infty
+                if intersect < dist:
+                    dist = intersect
+        dist_penalty = 0 if collision else - max(abs(state.velocity), 1) * self.COLLISION_PENALTY * np.exp(-dist)
+        return heading_score + collision_penalty \
+               + idle_penalty + speeding_penalty + dist_penalty
 
     def run(self, steps=None):
         """
